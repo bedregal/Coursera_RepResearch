@@ -1,0 +1,161 @@
+---
+title: "The impact of natural phenomena in the Economy and Public Health in the United States"
+author: "A. G. Bedregal"
+output: 
+  html_document:
+    pandoc_args: [
+      "+RTS", "-K64m",
+      "-RTS"
+    ]
+---
+
+## Synopsis
+In this assignment we use the *U.S. National Oceanic and Atmospheric Administration's (NOAA)* storm database to address a couple of general questions concerning the effects of different natural phenomena in the economy and public health in the U.S. Specifically, we find that in the period between the years 1950-2011 the natural events that produce the greatest economic loss are **floods** with over **150 billion dollars in accumulated losses.** Also, we find that between the same period, the natural events that are more harmful for the population health are **tornados**, accumulating almost **100,000 fatalities and injured people.**
+
+
+
+## Data Processing
+The NOAA storm database tracks characteristics of major storms and weather events in the United States in the period between 1950 and November 2011. This database includes when and where the events occur, and estimates the number of fatalities, injured people, and property damage. In the earlier years of the database there are generally fewer events recorded, most likely due to a lack of good records. More recent years should be considered more complete.
+
+
+### (a) Reading and storing the data
+We start by unzipping the `bzip2` file with the data set and storing it in a data frame. At this point we cache the entire database in the memory as its large size slows down the creation of the Markdown document:
+
+```{r, echo=TRUE,cache=TRUE}
+data <- read.csv(bzfile("repdata-data-StormData.csv.bz2"))
+```
+
+Now we produce a general summary of the data set content:
+
+```{r, echo=TRUE}
+summary(data)
+```
+
+The database consists of `r ncol(data)` variables and `r nrow(data)` entries.
+
+
+### (b) Some definitions and selecting the relevant variables
+
+At this point we make two basic definitions that will allowed us to answer the main questions we address in this work, together with deciding which variables fro  the storm database are relevant to answer these questions.
+
+- We define the **economic losses** produced by a given natural phenomenon as the overall cost of damages (in U.S. dollars) in property (public and private) and crops. 
+
+- We define the **impact in the population health** by a given natural phenomenon as the total number of fatalities and injured people combined. This considers the fatalities and injured as a direct OR indirect consequence of the occurrence of the natural phenomenon (event).
+
+With the above definitions and after looking at the summary above, we define which are the relevant variables to be considered in our study. First, to assess the risk for public health we use the sum of these variables:
+
+- `FATALITIES` 
+- `INJURIES`
+
+quantified after an event. 
+
+Second, to quantify the negative economic consequences of an event, we use the variables:
+
+- `PROPDMG` and `PROPDMGEXP`: Together they give the cost in property (public and private) damage produced by the event in U.S. dollars.
+- `CROPDMG` and `CROPDMGEXP`: Together they give the cost in crop damage produced by the event in U.S. dollars.
+
+Finally, to identify the different event types, we use the variable:
+
+- `EVTYPE`
+
+which corresponds to the names of `r nrow(levels(data$EVTYPE))` different natural phenomena, including among them: Avalanche, Blizzards, Cold, Flood, Heat Wave, Hurricanes, Snow, Tornadoes, etc.
+
+We store these variables in a new data frame. Also, we check for no entry values (NA) in any of the variables of the data set:
+
+```{r, echo=TRUE}
+dataWK1 <- data.frame(data$EVTYPE, data$FATALITIES, data$INJURIES, data$PROPDMG, 
+                        data$PROPDMGEXP, data$CROPDMG, data$CROPDMGEXP)
+colnames(dataWK1) <- c("EVTYPE", "FATALITIES", "INJURIES", "PROPDMG", "PROPDMGEXP", "CROPDMG", "CROPDMGEXP")
+
+#Checking for NA cases
+table(is.na(dataWK1))
+```
+
+So, none of the entries in our new data frame has NA values we have to worry about. Therefore, we use all the original entries of the storm database for our calculations.
+
+Now, we have to transform the losses from property and crops damage in numeric U.S. dollar values. For this we need the information in the `PROPDMGEXP` and `CROPDMGEXP` variables, which, among other things, tell us if the amount in the `PROPDMG` and `CROPDMG` variables is in thousands (K), millions (M) or billions (B) of dollars. All other code values in the `PROPDMGEXP` and `CROPDMGEXP` variables are ignored.
+
+```{r, echo=TRUE, cache=TRUE}
+
+PROP_DOLLAR <- dataWK1$PROPDMG
+CROP_DOLLAR <- dataWK1$CROPDMG
+
+flg_P_K <- as.character(dataWK1$PROPDMGEXP) == "K"
+flg_P_M <- as.character(dataWK1$PROPDMGEXP) == "M"
+flg_P_B <- as.character(dataWK1$PROPDMGEXP) == "B"
+flg_C_K <- as.character(dataWK1$CROPDMGEXP) == "K"
+flg_C_M <- as.character(dataWK1$CROPDMGEXP) == "M"
+flg_C_B <- as.character(dataWK1$CROPDMGEXP) == "B"
+
+PROP_DOLLAR[flg_P_K] = dataWK1$PROPDMG[flg_P_K] * 1000
+PROP_DOLLAR[flg_P_M] = dataWK1$PROPDMG[flg_P_M] * 1000000
+PROP_DOLLAR[flg_P_B] = dataWK1$PROPDMG[flg_P_B] * 1000000000
+
+CROP_DOLLAR[flg_C_K] = dataWK1$CROPDMG[flg_C_K] * 1000
+CROP_DOLLAR[flg_C_M] = dataWK1$CROPDMG[flg_C_M] * 1000000
+CROP_DOLLAR[flg_C_B] = dataWK1$CROPDMG[flg_C_B] * 1000000000
+
+data_clean <- cbind(dataWK1, PROP_DOLLAR, CROP_DOLLAR)
+```
+
+Just above we attached the losses in U.S. dollars to our final data frame, ´data_clean´.
+
+
+
+## Results
+
+To address which events cause more damage to the economy we add up the amount (U.S. dollars) of losses caused by a given event from both, property and crops damage. In the same way, to address which events are more harmful to the public health we add up the number of fatalities and injured caused by a given event.
+
+```{r, echo=TRUE}
+totHEALlost_people <- tapply(rowSums(cbind(data_clean$FATALITIES, 
+                        data_clean$INJURIES)), data_clean$EVTYPE, sum)
+totECONlost_dollar <- tapply(rowSums(cbind(PROP_DOLLAR, CROP_DOLLAR)), 
+                             data_clean$EVTYPE, sum)
+```
+
+
+### (a) Which event causes more damage to the economy?
+
+We address this question in the plot below
+
+```{r, echo=TRUE}
+# Plotting Fig. 1
+plot(as.numeric(as.factor(levels(data_clean$EVTYPE))), totECONlost_dollar/1e6, 
+     type="l",ylab="U.S. dollars [Millions]", xlab="Number associated to each Type of Event", col="blue")
+text(350, 149319.0, labels ="<<<< Maximum: FLOOD", col="limegreen", font=2)
+```
+
+*Figure 1: Type of event versus total accumulated economic looses in U.S. dollars (1950-2011). Plotted in a time-series fashon. The green <<<< symbol points to the natural event with the greatest economic impact it terms of property and crops damage.*
+
+```{r, echo=TRUE}
+# Finding type of event with the gratest loss in U.S. dollars.
+mymax1 <- max(totECONlost_dollar)
+flg_mymax1 <- totECONlost_dollar == mymax1
+```
+
+According to Figure 1, the type of event that causes the greatest economic loss is **`r levels(data_clean$EVTYPE)[flg_mymax1]`** with **`r mymax1/1e9` BILLION dollars** of accumulated losses between 1950 and November 2011.
+
+
+
+### (b) Which event causes more damage to the population health?
+
+We address this question in the plot below
+
+```{r, echo=TRUE}
+plot(as.numeric(as.factor(levels(data_clean$EVTYPE))), totHEALlost_people, type="l",
+     ylab="Number of fatalities + injured", xlab="Number associated to each Type of Event", col="red")
+text(620, 96000, labels ="Maximum: TORNADO >>>>", col="limegreen", font=2)
+```
+
+*Figure 2: Type of event versus total accumulated number of fatalities and injured people (1950-2011). The green <<<< symbol points to the most harmful natural event for the population health.*
+
+```{r, echo=TRUE}
+# Finding event with greatest number fatalities + injured.
+mymax2 <- max(totHEALlost_people)
+flg_mymax2 <- totHEALlost_people == mymax2
+```
+
+
+According to Figure 2, the type of event that causes the greatest damage to public health is **`r levels(data_clean$EVTYPE)[flg_mymax2]`** with **`r mymax2` people dead or injured.**
+
+
